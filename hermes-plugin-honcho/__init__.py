@@ -859,17 +859,20 @@ class HonchoMemoryProvider(DialecticMixin, MemoryProvider):
     def on_memory_write(
         self, action: str, target: str, content: str, metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Mirror built-in user-profile writes as Honcho conclusions (``metadata`` accepted
-        for interface compatibility, not yet threaded into the conclusion payload)."""
-        if action != "add" or target != "user" or not content:
+        """Mirror built-in memory adds and replaces as Honcho conclusions: USER.md entries on the
+        user peer, MEMORY.md entries on the AI peer (``metadata`` accepted for interface
+        compatibility, not yet threaded into the conclusion payload)."""
+        if action not in ("add", "replace") or target not in ("user", "memory") or not content:
             return
         if self._turn_author.get("is_bot"):
             logger.debug("Honcho memory mirror skipped during a bot-authored turn")
             return
         if not self._writes_enabled() or not self._ready_or_kick_init():
             return
-        self._memwrite_thread = self._spawn_write(lambda: self._manager.create_conclusion(self._session_key, content),
-                                                  "honcho-memwrite", "Honcho memory mirror failed: %s")
+        peer = "user" if target == "user" else "ai"
+        self._memwrite_thread = self._spawn_write(
+            lambda: self._manager.create_conclusion(self._session_key, content, peer=peer),
+            "honcho-memwrite", "Honcho memory mirror failed: %s")
 
     def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
         """Flush all pending messages to Honcho on session end."""
